@@ -1,0 +1,117 @@
+#todo: clean data for missing vals, sort data based on some standard, exeption handling and logging for script
+import requests
+import configparser
+import pandas as pd
+import datetime as dt
+import time
+import json
+import os
+from re import I
+import logging
+import sys
+from typing import Dict, Any, Optional
+
+try:
+    BASE_DIR = "/Users/akhilan07/Documents/CryptoStraddleIV"
+    CONFIG_PATH = f"{BASE_DIR}/Alpaca.cfg"
+    OUTPUT_DIR = f"{BASE_DIR}/output"
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # Making AlpacaAPI call for BTC options data
+    config = configparser.ConfigParser()
+    config.read(CONFIG_PATH)
+
+    API_KEY = config['alpaca']['APCA_API_KEY_ID']
+    API_SECRET = config['alpaca']['APCA_API_SECRET_KEY']
+
+    name = "BTC"
+
+    url = f"https://data.alpaca.markets/v1beta1/options/snapshots/{name}?feed=indicative&limit=1000"
+
+    headers = {
+        "accept": "application/json",
+        "APCA-API-KEY-ID": API_KEY,
+        "APCA-API-SECRET-KEY": API_SECRET
+    }
+
+    def safe_get(url, headers, attempts=5):
+        for i in range(attempts):
+            try:
+                return requests.get(url, headers=headers, timeout=10)
+            except Exception as e:
+                print(f"Attempt {i+1} failed: {e}")
+                time.sleep(5)
+        raise Exception("All retries failed.")
+
+    response = safe_get(url, headers)
+
+    data = json.loads(response.text)
+
+    if 'snapshots' not in data:
+        print("No snapshots returned:", data)
+        exit()
+
+    opt_data = []
+
+    # extract features
+    for symbol, details in data['snapshots'].items():
+        opt_row = {'symbol' : symbol}
+
+        if 'impliedVolatility' in details:
+            opt_row['impliedVolatility'] = details['impliedVolatility']
+
+        if 'greeks' in details:
+            for k, v in details['greeks'].items():
+                opt_row[f'greeks_{k}'] = v
+
+        if 'dailyBar' in details:
+            for k, v in details['dailyBar'].items():
+                opt_row[f'dailyBar_{k}'] = v
+
+        if 'latestQuote' in details:
+            for k, v in details['latestQuote'].items():
+                opt_row[f'latestQuote_{k}'] = v
+
+        if 'latestTrade' in details:
+            for k, v in details['latestTrade'].items():
+                opt_row[f'latestTrade_{k}'] = v
+
+        if 'minuteBar' in details:
+            for k, v in details['minuteBar'].items():
+                opt_row[f'minuteBar_{k}'] = v
+
+        if 'prevDailyBar' in details:
+            for k, v in details['prevDailyBar'].items():
+                opt_row[f'prevDailyBar_{k}'] = v
+
+        date_start = len(name)
+        price_start = len(name) + 7
+
+        exp_year = int("20" + symbol[date_start : date_start + 2])
+        exp_month = int(symbol[date_start + 2 : date_start + 4])
+        exp_day = int(symbol[date_start + 4 : date_start + 6])
+
+        exp_date = dt.date(exp_year, exp_month, exp_day)
+        opt_row['expires'] = exp_date
+        opt_row['price'] = int(symbol[price_start :])
+
+        opt_data.append(opt_row)
+
+
+    df = pd.DataFrame(opt_data)
+
+    # Save to CSV
+    timestamp = dt.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+    prefix = f"{name}_snapshots"
+
+    for f in os.listdir(OUTPUT_DIR):
+        if f.startswith(prefix):
+            os.remove(os.path.join(OUTPUT_DIR, f))
+
+    csv_path = f"{OUTPUT_DIR}/{name}_snapshots_{timestamp}.csv"
+    df.to_csv(csv_path, index=False)
+    print(f"Saved snapshots to: {csv_path}")
+except Exception as e:
+    print(f"Error {e} has occured.")
