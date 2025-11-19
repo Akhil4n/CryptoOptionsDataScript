@@ -19,8 +19,8 @@ try:
 
 
     # Making AlpacaAPI call for BTC options data
-    API_KEY = os.environ.get('ALPACA_API_KEY')
-    API_SECRET = os.environ.get('ALPACA_API_SECRET')
+    API_KEY = os.environ.get('ALPACA_API_KEY').strip()
+    API_SECRET = os.environ.get('ALPACA_API_SECRET').strip()
 
     if not API_KEY or not API_SECRET:
         print("Environment variables not found, attempting to read from config file...")
