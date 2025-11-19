@@ -2,10 +2,8 @@ name: Run Crypto Snapshots
 
 on:
   schedule:
-    # 9:30 AM EST = 14:30 UTC (during standard time)
-    # 9:30 AM EDT = 13:30 UTC (during daylight saving)
     - cron: "30 14 * * *"
-  workflow_dispatch:  # allows manual run
+  workflow_dispatch:
 
 jobs:
   run-script:
@@ -23,6 +21,10 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+
+      - name: Clean up old CSV files
+        run: |
+          rm -f output/BTC_snapshots_*.csv
 
       - name: Run script
         env:
