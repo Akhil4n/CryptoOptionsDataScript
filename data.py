@@ -12,18 +12,34 @@ import sys
 from typing import Dict, Any, Optional
 
 try:
-    BASE_DIR = "/Users/akhilan07/Documents/CryptoStraddleIV"
-    CONFIG_PATH = f"{BASE_DIR}/Alpaca.cfg"
-    OUTPUT_DIR = f"{BASE_DIR}/output"
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # Making AlpacaAPI call for BTC options data
-    config = configparser.ConfigParser()
-    config.read(CONFIG_PATH)
 
-    API_KEY = config['alpaca']['APCA_API_KEY_ID']
-    API_SECRET = config['alpaca']['APCA_API_SECRET_KEY']
+    # Making AlpacaAPI call for BTC options data
+    API_KEY = os.environ.get('ALPACA_API_KEY')
+    API_SECRET = os.environ.get('ALPACA_API_SECRET')
+
+    if not API_KEY or not API_SECRET:
+        print("Environment variables not found, attempting to read from config file...")
+        CONFIG_PATH = os.path.join(BASE_DIR, "Alpaca.cfg")
+        
+        if not os.path.exists(CONFIG_PATH):
+            raise ValueError(
+                "API credentials not found. Please either:\n"
+                "1. Set ALPACA_API_KEY and ALPACA_API_SECRET environment variables, or\n"
+                "2. Create Alpaca.cfg file with credentials"
+            )
+        config = configparser.ConfigParser()
+        config.read(CONFIG_PATH)
+        
+        API_KEY = config['alpaca']['APCA_API_KEY_ID']
+        API_SECRET = config['alpaca']['APCA_API_SECRET_KEY']
+        print("✓ Loaded credentials from config file")
+    else:
+        print("✓ Loaded credentials from environment variables")
 
     name = "BTC"
 
@@ -50,7 +66,7 @@ try:
 
     if 'snapshots' not in data:
         print("No snapshots returned:", data)
-        exit()
+        exit(1)
 
     opt_data = []
 
@@ -115,3 +131,6 @@ try:
     print(f"Saved snapshots to: {csv_path}")
 except Exception as e:
     print(f"Error {e} has occured.")
+    import traceback
+    traceback.print_exc()
+    exit(1)

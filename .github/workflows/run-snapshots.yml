@@ -2,9 +2,11 @@ name: Run Crypto Snapshots
 
 on:
   schedule:
-    # 9:30 AM EST = 14:30 UTC
+    # 9:30 AM EST = 14:30 UTC (during standard time)
+    # 9:30 AM EDT = 13:30 UTC (during daylight saving)
     - cron: "30 14 * * *"
   workflow_dispatch:  # allows manual run
+
 jobs:
   run-script:
     runs-on: ubuntu-latest
@@ -23,10 +25,21 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run script
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
         run: |
           python data.py
 
-      - name: Upload output
+      - name: Commit and push output
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add output/*.csv
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update BTC snapshots - $(date +'%Y-%m-%d %H:%M:%S')"
+          git push
+
+      - name: Upload output as artifact
         uses: actions/upload-artifact@v3
         with:
           name: snapshot-output
