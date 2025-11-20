@@ -15,9 +15,6 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 def upload_to_drive(file_path, folder_id):
-    """
-    Upload file to Google Drive using service account
-    """
     try:
         # Load credentials from environment variable
         creds_json = os.environ.get('GOOGLE_DRIVE_CREDENTIALS')
@@ -37,11 +34,19 @@ def upload_to_drive(file_path, folder_id):
         
         # Check for existing file and delete if found
         query = f"name='{file_name}' and '{folder_id}' in parents and trashed=false"
-        results = service.files().list(q=query, fields="files(id, name)").execute()
+        results = service.files().list(
+            q=query, 
+            fields="files(id, name)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True
+        ).execute()
         items = results.get('files', [])
         
         for item in items:
-            service.files().delete(fileId=item['id']).execute()
+            service.files().delete(
+                fileId=item['id'],
+                supportsAllDrives=True
+            ).execute()
             print(f"✓ Deleted existing file: {item['name']}")
         
         # Upload new file
@@ -54,7 +59,8 @@ def upload_to_drive(file_path, folder_id):
         file = service.files().create(
             body=file_metadata,
             media_body=media,
-            fields='id, name, webViewLink'
+            fields='id, name, webViewLink',
+            supportsAllDrives=True
         ).execute()
         
         print(f"✓ File uploaded to Google Drive: {file.get('name')}")
