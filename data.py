@@ -12,7 +12,7 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-def upload_to_drive(file_path, folder_id):
+def upload_to_drive(file_path, folder_id, keep_last=2):
     """
     Upload file to Google Drive using OAuth credentials
     """
@@ -41,14 +41,22 @@ def upload_to_drive(file_path, folder_id):
         
         file_name = os.path.basename(file_path)
         
-        # Check for existing file and delete if found
-        query = f"name='{file_name}' and '{folder_id}' in parents and trashed=false"
-        results = service.files().list(q=query, fields="files(id, name)").execute()
+        # Get all BTC snapshot files, sorted by creation time (newest first)
+        query = f"name contains 'BTC_snapshots_' and '{folder_id}' in parents and trashed=false"
+        results = service.files().list(
+            q=query, 
+            fields="files(id, name, createdTime)",
+            orderBy="createdTime desc"
+        ).execute()
         items = results.get('files', [])
         
-        for item in items:
+        # Delete files beyond the keep limit
+        # We keep (keep_last - 1) because we're about to upload a new one
+        files_to_delete = items[keep_last-1:] if len(items) >= keep_last else []
+        
+        for item in files_to_delete:
             service.files().delete(fileId=item['id']).execute()
-            print(f"✓ Deleted existing file: {item['name']}")
+            print(f"✓ Deleted old file: {item['name']}")
         
         # Upload new file
         file_metadata = {
