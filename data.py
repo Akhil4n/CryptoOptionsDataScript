@@ -10,6 +10,63 @@ from re import I
 import logging
 import sys
 from typing import Dict, Any, Optional
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+
+def upload_to_drive(file_path, folder_id):
+    """
+    Upload file to Google Drive using service account
+    """
+    try:
+        # Load credentials from environment variable
+        creds_json = os.environ.get('GOOGLE_DRIVE_CREDENTIALS')
+        if not creds_json:
+            print("Warning: GOOGLE_DRIVE_CREDENTIALS not found, skipping upload")
+            return None
+        
+        creds_dict = json.loads(creds_json)
+        credentials = service_account.Credentials.from_service_account_info(
+            creds_dict,
+            scopes=['https://www.googleapis.com/auth/drive.file']
+        )
+        
+        service = build('drive', 'v3', credentials=credentials)
+        
+        file_name = os.path.basename(file_path)
+        
+        # Check for existing file and delete if found
+        query = f"name='{file_name}' and '{folder_id}' in parents and trashed=false"
+        results = service.files().list(q=query, fields="files(id, name)").execute()
+        items = results.get('files', [])
+        
+        for item in items:
+            service.files().delete(fileId=item['id']).execute()
+            print(f"✓ Deleted existing file: {item['name']}")
+        
+        # Upload new file
+        file_metadata = {
+            'name': file_name,
+            'parents': [folder_id]
+        }
+        
+        media = MediaFileUpload(file_path, resumable=True)
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id, name, webViewLink'
+        ).execute()
+        
+        print(f"✓ File uploaded to Google Drive: {file.get('name')}")
+        print(f"✓ View link: {file.get('webViewLink')}")
+        
+        return file.get('id')
+    
+    except Exception as e:
+        print(f"✗ Error uploading to Google Drive: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 try:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -17,10 +74,9 @@ try:
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-
     # Making AlpacaAPI call for BTC options data
-    API_KEY = os.environ.get('ALPACA_API_KEY')
-    API_SECRET = os.environ.get('ALPACA_API_SECRET')
+    API_KEY = os.environ.get('ALPACA_API_KEY', '').strip()
+    API_SECRET = os.environ.get('ALPACA_API_SECRET', '').strip()
 
     if not API_KEY or not API_SECRET:
         print("Environment variables not found, attempting to read from config file...")
@@ -35,8 +91,8 @@ try:
         config = configparser.ConfigParser()
         config.read(CONFIG_PATH)
         
-        API_KEY = config['alpaca']['APCA_API_KEY_ID']
-        API_SECRET = config['alpaca']['APCA_API_SECRET_KEY']
+        API_KEY = config['alpaca']['APCA_API_KEY_ID'].strip()
+        API_SECRET = config['alpaca']['APCA_API_SECRET_KEY'].strip()
         print("✓ Loaded credentials from config file")
     else:
         print("✓ Loaded credentials from environment variables")
@@ -114,7 +170,6 @@ try:
 
         opt_data.append(opt_row)
 
-
     df = pd.DataFrame(opt_data)
 
     # Save to CSV
@@ -126,11 +181,20 @@ try:
         if f.startswith(prefix):
             os.remove(os.path.join(OUTPUT_DIR, f))
 
-    csv_path = f"{OUTPUT_DIR}/{name}_snapshots_{timestamp}.csv"
+    csv_path = os.path.join(OUTPUT_DIR, f"{name}_snapshots_{timestamp}.csv")
     df.to_csv(csv_path, index=False)
-    print(f"Saved snapshots to: {csv_path}")
+    print(f"✓ Saved snapshots to: {csv_path}")
+    print(f"✓ Total options captured: {len(df)}")
+    
+    # Upload to Google Drive
+    folder_id = os.environ.get('GOOGLE_DRIVE_FOLDER_ID')
+    if folder_id:
+        upload_to_drive(csv_path, folder_id)
+    else:
+        print("Warning: GOOGLE_DRIVE_FOLDER_ID not set, skipping Google Drive upload")
+    
 except Exception as e:
-    print(f"Error {e} has occured.")
+    print(f"✗ Error {e} has occurred.")
     import traceback
     traceback.print_exc()
     exit(1)
