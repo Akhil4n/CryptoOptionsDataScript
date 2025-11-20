@@ -7,8 +7,6 @@ import time
 import json
 import os
 from re import I
-import logging
-import sys
 from typing import Dict, Any, Optional
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
