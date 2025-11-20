@@ -12,7 +12,7 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-def upload_to_drive(file_path, folder_id, keep_last=2):
+def upload_to_drive(file_path, folder_id, keep_last=1):
     """
     Upload file to Google Drive using OAuth credentials
     """
