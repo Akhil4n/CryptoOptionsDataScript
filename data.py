@@ -7,12 +7,15 @@ import time
 import json
 import os
 from re import I
-from typing import Dict, Any, Optional
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 def upload_to_drive(file_path, folder_id):
+    """
+    Upload file to Google Drive using OAuth credentials
+    """
     try:
         # Load credentials from environment variable
         creds_json = os.environ.get('GOOGLE_DRIVE_CREDENTIALS')
@@ -21,10 +24,18 @@ def upload_to_drive(file_path, folder_id):
             return None
         
         creds_dict = json.loads(creds_json)
-        credentials = service_account.Credentials.from_service_account_info(
-            creds_dict,
-            scopes=['https://www.googleapis.com/auth/drive.file']
+        credentials = Credentials(
+            token=creds_dict.get('token'),
+            refresh_token=creds_dict.get('refresh_token'),
+            token_uri=creds_dict.get('token_uri'),
+            client_id=creds_dict.get('client_id'),
+            client_secret=creds_dict.get('client_secret'),
+            scopes=creds_dict.get('scopes')
         )
+        
+        # Refresh token if expired
+        if credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
         
         service = build('drive', 'v3', credentials=credentials)
         
@@ -32,19 +43,11 @@ def upload_to_drive(file_path, folder_id):
         
         # Check for existing file and delete if found
         query = f"name='{file_name}' and '{folder_id}' in parents and trashed=false"
-        results = service.files().list(
-            q=query, 
-            fields="files(id, name)",
-            supportsAllDrives=True,
-            includeItemsFromAllDrives=True
-        ).execute()
+        results = service.files().list(q=query, fields="files(id, name)").execute()
         items = results.get('files', [])
         
         for item in items:
-            service.files().delete(
-                fileId=item['id'],
-                supportsAllDrives=True
-            ).execute()
+            service.files().delete(fileId=item['id']).execute()
             print(f"✓ Deleted existing file: {item['name']}")
         
         # Upload new file
@@ -57,8 +60,7 @@ def upload_to_drive(file_path, folder_id):
         file = service.files().create(
             body=file_metadata,
             media_body=media,
-            fields='id, name, webViewLink',
-            supportsAllDrives=True
+            fields='id, name, webViewLink'
         ).execute()
         
         print(f"✓ File uploaded to Google Drive: {file.get('name')}")

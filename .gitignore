@@ -1,1 +1,7 @@
 Alpaca.cfg
+__pycache__/
+*.pyc
+client_secret.json
+generate_token.py
+token.pickle
+credentials.json
