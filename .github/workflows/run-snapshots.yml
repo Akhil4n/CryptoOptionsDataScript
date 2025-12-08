@@ -1,8 +1,8 @@
 name: Run Crypto Snapshots
 
 on:
-  schedule:
-    - cron: "35 14 * * *"
+  # schedule:
+  #   - cron: "35 14 * * *"
   workflow_dispatch:
 
 jobs:
